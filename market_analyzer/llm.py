@@ -287,19 +287,66 @@ def _gemini(query, on_text, on_status, model) -> Tuple[str, Dict[str, Any]]:
 
 # --- provider: Groq (grounded on the app's public-source gatherers) ----------
 
-def _gather_context(query: str, on_status=None, char_limit: int = 5000) -> str:
-    """Compact public-source context for grounding (kept small for free-tier TPM)."""
+def _fetch_page(url: str, timeout: int = 8, limit: int = 1800) -> str:
+    """Fetch a URL and return its readable text (stripped of markup)."""
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+        r = requests.get(url, timeout=timeout,
+                         headers={"User-Agent": "Mozilla/5.0 (MarketAnalyzer)"})
+        soup = BeautifulSoup(r.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form"]):
+            tag.decompose()
+        return " ".join(soup.get_text(" ").split())[:limit]
+    except Exception:
+        return ""
+
+
+# Search angles fed to the web engine. Edit / add lines to steer what gets found.
+_SEARCH_ANGLES = [
+    "{q} competitors and alternatives",
+    "{q} market size as of 2026",
+    "{q} revenue in FY25 and FY26"
+    "{q} funding, valuation in the latest round",
+    "{q} market share in india and globally",
+    "{q} Customers, users"
+]
+
+
+def _gather_context(query: str, on_status=None, char_limit: int = 11000,
+                    read_pages: int = 4) -> str:
+    """Search the whole web (DuckDuckGo) + Wikipedia + news, and READ the top
+    result pages (not just snippets) so the model has real content to ground on."""
     from .sources import websearch, wikipedia, news
     if on_status:
-        on_status("🔎 Gathering public sources…")
+        on_status("🔎 Searching the web…")
     chunks: List[str] = []
+
     w = wikipedia.best_summary(query)
     if w and w.get("extract"):
-        chunks.append("WIKIPEDIA: " + w["extract"][:800])
-    for r in websearch.text_search(f"{query} competitors market size funding", 8):
-        chunks.append(f"- {r.get('title','')}: {(r.get('body','') or '')[:220]}")
-    for n in news.headlines(query, 6):
+        chunks.append("WIKIPEDIA: " + w["extract"][:1500])
+
+    seen_urls: set = set()
+    top_urls: List[str] = []
+    for angle in _SEARCH_ANGLES:
+        for r in websearch.text_search(angle.format(q=query), 6):
+            body = (r.get("body") or "")[:300]
+            chunks.append(f"- {r.get('title','')}: {body}")
+            u = r.get("href") or r.get("url")
+            if u and u not in seen_urls and len(top_urls) < read_pages:
+                seen_urls.add(u)
+                top_urls.append(u)
+
+    if top_urls and on_status:
+        on_status("🔎 Reading top pages…")
+    for u in top_urls:
+        page = _fetch_page(u)
+        if page:
+            chunks.append(f"PAGE ({u}): {page}")
+
+    for n in news.headlines(query, 8):
         chunks.append(f"- NEWS: {n.get('title','')}")
+
     return "\n".join(c for c in chunks if c.strip())[:char_limit]
 
 
