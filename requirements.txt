@@ -1,0 +1,23 @@
+# Core UI
+streamlit>=1.36
+
+# AI research engine (optional — enables real insights when an API key is set).
+# Only the provider whose key you set is used; the others sit unused.
+anthropic>=0.49          # ANTHROPIC_API_KEY  (built-in web search, best quality)
+google-genai>=1.0        # GEMINI_API_KEY     (free tier, Google Search grounding)
+groq>=0.11               # GROQ_API_KEY       (free tier, grounded via app's gatherers)
+
+# Live research sources (all keyless / public domain)
+ddgs>=6.0            # DuckDuckGo web + news search (no API key)
+yfinance>=0.2.40     # Yahoo Finance financials & ticker search (no API key)
+feedparser>=6.0      # Google News RSS parsing
+requests>=2.31       # Wikipedia REST + generic HTTP
+beautifulsoup4>=4.12 # HTML snippet cleaning
+
+# Data & charts
+pandas>=2.0
+plotly>=5.22
+kaleido>=0.2.1       # static PNG export of Plotly charts for the PDF
+
+# PDF report
+reportlab>=4.1
